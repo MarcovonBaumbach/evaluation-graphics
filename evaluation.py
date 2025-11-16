@@ -23,7 +23,6 @@ INPUT_FILE = "bitunix.xlsx"
 OUTDIR = "charts"
 PDF_NAME = "Trading_Report.pdf"
 TRADES_PER_YEAR = 252
-ENABLE_TICKER_COMPARISON = True  # expects column 'ticker' in Excel
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
@@ -156,7 +155,6 @@ def compute_comparisons(df):
 # ==============================================
 # CHARTS 
 # ============================================== 
-# ==============================================
 
 def create_charts(df, monthly, monthly_counts, outdir, comparison=None):
     ensure_dir(outdir)
@@ -192,7 +190,7 @@ def create_charts(df, monthly, monthly_counts, outdir, comparison=None):
 
         plt.text(x, equity_before, f"{equity_before:.0f}", fontsize=8, va="bottom", color="green")
         plt.text(x, net_before, f"{net_before:.0f}", fontsize=8, va="bottom", color="blue")
-        # Improve x-axis ticks: show only monthly ticks
+        # X-axis ticks: show only monthly ticks
         unique_months = monthly_first["closed time"]
         plt.xticks(unique_months, [d.strftime("%Y-%m") for d in unique_months], rotation=45)
 
@@ -283,6 +281,7 @@ def create_charts(df, monthly, monthly_counts, outdir, comparison=None):
     # ----------------------------------------------------
     # 4.1) Win vs Loss Pie (Net PnL)
     # ----------------------------------------------------
+
     net_wins = (df["net_pnl"] > 0).sum()
     net_losses = (df["net_pnl"] <= 0).sum()
 
@@ -325,6 +324,7 @@ def create_charts(df, monthly, monthly_counts, outdir, comparison=None):
     # ----------------------------------------------------
     # 5.1) Monthly Wins vs Losses Bar Chart (Net PnL)
     # ----------------------------------------------------
+
     monthly_counts_net = df.groupby("month").agg(
         Wins_net=("net_pnl", lambda s: (s > 0).sum()),
         Losses_net=("net_pnl", lambda s: (s <= 0).sum())
@@ -419,6 +419,7 @@ def build_pdf(metrics, charts, comparison, pdfname):
     # -----------------------------------------------
     # Overview Table
     # -----------------------------------------------
+
     ov = metrics
     overview_rows = [
         ["Total Trades", ov["total_trades"]],
@@ -449,6 +450,7 @@ def build_pdf(metrics, charts, comparison, pdfname):
     # -----------------------------------------------
     # Monthly Summary Table
     # -----------------------------------------------
+
     story.append(Paragraph("Monthly Trading Summary", h2))
 
     m = metrics["monthly"]
@@ -481,6 +483,7 @@ def build_pdf(metrics, charts, comparison, pdfname):
     # -----------------------------------------------
     # Ticker/Strategy Comparison Table
     # -----------------------------------------------
+
     if comparison is not None:
         story.append(Paragraph("Ticker / Strategy Comparison", h2))
 
@@ -506,6 +509,7 @@ def build_pdf(metrics, charts, comparison, pdfname):
     # -----------------------------------------------
     # Charts (stacked under each other)
     # -----------------------------------------------
+    
     story.append(Paragraph("Charts", h2))
     story.append(Spacer(1, 8))
 
