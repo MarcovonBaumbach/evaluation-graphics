@@ -74,7 +74,7 @@ def load_data(path):
 
     df = pd.read_excel(path)
 
-    required = {"closed time", "realized pnl", "closed value"}
+    required = {"closed time", "realized pnl", "closed value", "opening time"}
     missing = required - set(df.columns)
     if missing:
         logging.error(f"Missing columns: {missing}")
@@ -82,6 +82,7 @@ def load_data(path):
 
     # parse times
     df["closed time"] = pd.to_datetime(df["closed time"], errors="coerce", utc=False).dt.tz_localize(None)
+    df["opening time"] = pd.to_datetime(df["opening time"], errors="coerce", utc=False).dt.tz_localize(None)
 
     open_col = guess_open_time_column(df)
     if open_col:
@@ -224,11 +225,14 @@ def compute_metrics(df):
     num_dd_per_month = len(dd_episodes) / max(1, df['month'].nunique())
 
     # trade duration (if open_time present)
-    if 'open_time' in df.columns:
-        df['duration'] = (df['closed time'] - df['open_time']).dt.total_seconds()
+    if 'opening time' in df.columns:
+        df['duration'] = (df['closed time'] - df['opening time']).dt.total_seconds()
         df['duration_minutes'] = df['duration'] / 60.0
+        df['duration_hours'] = df['duration'] / 3600.0
     else:
         df['duration_minutes'] = np.nan
+        df['duration_hours'] = np.nan
+
 
     # streaks
     streaks = []
@@ -302,6 +306,13 @@ def compute_metrics(df):
     )
     hourly['WinRate'] = hourly['WinRate'] * 100
 
+    df['entry_hour'] = df['opening time'].dt.hour
+    hourly_entry = df.groupby('entry_hour').agg(
+        PnL=('realized pnl', 'sum'),
+        Trades=('realized pnl', 'count'),
+        WinRate=('success', 'mean')
+    )
+
     # monthly summaries
     monthly = df.groupby('month').agg(
         closed_value=('closed value', 'sum'),
@@ -348,6 +359,7 @@ def compute_metrics(df):
         'fee_ratio': fee_ratio,
         'per_asset': per_asset,
         'hourly': hourly,
+        'hourly_entry': hourly_entry,
         'outliers': outliers,
     }
 
@@ -519,11 +531,11 @@ def create_charts(df, monthly, monthly_counts, outdir, metrics):
 
     # 7) Hourly performance bar
     try:
-        h = metrics['hourly']
+        h = metrics['hourly_entry']
         plt.figure(figsize=(10,4))
         plt.bar(h.index, h['PnL'])
-        plt.title('PnL by Hour of Day')
-        plt.xlabel('Hour')
+        plt.title('PnL by Hour of Day (when trades have been opened)')
+        plt.xlabel('h')
         plt.ylabel('PnL')
         plt.grid(axis='y', alpha=.25)
         hourly_path = f"{outdir}/pnl_by_hour.png"
@@ -532,7 +544,36 @@ def create_charts(df, monthly, monthly_counts, outdir, metrics):
     except Exception:
         charts['pnl_by_hour'] = None
 
-    # 8) Drawdown durations bar
+    # 8) Duration histogram
+    try:
+        plt.figure(figsize=(8,4))
+        plt.hist(df['duration_hours'].dropna(), bins=30)
+        plt.title('Trade Duration')
+        plt.xlabel('Hours')
+        plt.ylabel('Count')
+        plt.grid(alpha=.25)
+        dur_path = f"{outdir}/duration_hist.png"
+        plt.tight_layout(); plt.savefig(dur_path, dpi=130); plt.close()
+        charts['duration_hist'] = dur_path
+    except Exception:
+        charts['duration_hist'] = None
+
+
+    # 9) PnL vs Duration scatter
+    try:
+        plt.figure(figsize=(8,4))
+        plt.scatter(df['duration_hours'], df['realized pnl'], s=10, alpha=0.6)
+        plt.title('PnL vs Trade Duration')
+        plt.xlabel('Duration (hours)')
+        plt.ylabel('Realized PnL ($)')
+        plt.grid(alpha=.25)
+        scatter_path = f"{outdir}/pnl_vs_duration.png"
+        plt.tight_layout(); plt.savefig(scatter_path, dpi=130); plt.close()
+        charts['pnl_vs_duration'] = scatter_path
+    except Exception:
+        charts['pnl_vs_duration'] = None
+
+    # 10) Drawdown durations bar
     try:
         plt.figure(figsize=(10,4))
         durations = [d for d in metrics['df']['drawdown'] if not pd.isna(d)]
@@ -547,7 +588,7 @@ def create_charts(df, monthly, monthly_counts, outdir, metrics):
     except Exception:
         charts['drawdown_summary'] = None
 
-    # 9) Position size hist
+    # 11) Position size hist
     try:
         plt.figure(figsize=(8,4))
         plt.hist(df['position_size'].dropna(), bins=30)
@@ -561,7 +602,7 @@ def create_charts(df, monthly, monthly_counts, outdir, metrics):
     except Exception:
         charts['position_size_hist'] = None
 
-    # 10) Per-asset PnL bar
+    # 12) Per-asset PnL bar
     try:
         pa = metrics['per_asset'].sort_values('TotalPnL', ascending=False).head(20)
         plt.figure(figsize=(10,4))
@@ -575,7 +616,7 @@ def create_charts(df, monthly, monthly_counts, outdir, metrics):
     except Exception:
         charts['pnl_by_asset'] = None
 
-    # 11) Fee impact chart (monthly)
+    # 13) Fee impact chart (monthly)
     try:
         monthly_fees = df.groupby('month').agg(total_fees=('position fee', 'sum'), funding=('funding fees', 'sum'))
         monthly_fees['fees'] = monthly_fees['total_fees'] + monthly_fees['funding']
@@ -702,7 +743,7 @@ def build_pdf(metrics, charts, pdfname):
     story.append(Paragraph('Charts', h2)); story.append(Spacer(1,8))
     order = [
         'equity','drawdown','hist','pie','pie_net_pnl','monthly_bar','monthly_bar_net','pf_monthly','pf_monthly_net',
-        'pnl_by_hour','position_size_hist','pnl_by_asset','fees_per_month','outliers','drawdown_summary'
+        'pnl_by_hour', 'duration_hist', 'pnl_vs_duration', 'position_size_hist','pnl_by_asset','fees_per_month','outliers','drawdown_summary'
     ]
     for key in order:
         f = charts.get(key)
