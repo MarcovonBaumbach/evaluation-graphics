@@ -399,7 +399,7 @@ def create_charts(df, monthly, monthly_counts, outdir, comparison=None):
 # PDF GENERATION
 # ==============================================
 
-def build_pdf(metrics, charts, comparison, pdfname):
+def build_pdf(metrics, charts, pdfname):
     styles = getSampleStyleSheet()
     title = ParagraphStyle(name="title", parent=styles["Heading1"], alignment=1)
     h2 = styles["Heading2"]
@@ -481,35 +481,9 @@ def build_pdf(metrics, charts, comparison, pdfname):
     story.append(Spacer(1, 18))
 
     # -----------------------------------------------
-    # Ticker/Strategy Comparison Table
-    # -----------------------------------------------
-
-    if comparison is not None:
-        story.append(Paragraph("Ticker / Strategy Comparison", h2))
-
-        comp_rows = [["Ticker","Trades","Total PnL","Win Rate %"]]
-        for tkr, row in comparison.iterrows():
-            comp_rows.append([
-                tkr,
-                int(row["Trades"]),
-                fmt(row["TotalPnL"]) + " $",
-                f"{fmt(row['WinRate'])}%",
-            ])
-
-        ct = Table(comp_rows, colWidths=[100,100,100,100])
-        ct.setStyle(TableStyle([
-            ("GRID", (0,0), (-1,-1), 0.25, colors.grey),
-            ("BACKGROUND", (0,0), (-1,0), colors.whitesmoke),
-            ("FONTSIZE", (0,0), (-1,-1), 9),
-        ]))
-
-        story.append(ct)
-        story.append(Spacer(1, 18))
-
-    # -----------------------------------------------
     # Charts (stacked under each other)
     # -----------------------------------------------
-    
+
     story.append(Paragraph("Charts", h2))
     story.append(Spacer(1, 8))
 
@@ -533,11 +507,9 @@ def main():
 
     metrics = compute_metrics(df)
 
-    comparison = compute_comparisons(df) if ENABLE_TICKER_COMPARISON else None
-
     charts = create_charts(metrics["df"], metrics["monthly"], metrics["monthly_counts"], OUTDIR)
 
-    build_pdf(metrics, charts, comparison, PDF_NAME)
+    build_pdf(metrics, charts, PDF_NAME)
 
     logging.info("All done!")
 
