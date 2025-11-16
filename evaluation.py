@@ -137,26 +137,10 @@ def compute_metrics(df):
     }
 
 # ==============================================
-# COMPARISON (TICKERS / STRATEGIES)
-# ==============================================
-
-def compute_comparisons(df):
-    if "ticker" not in df.columns:
-        return None
-
-    comp = df.groupby("ticker").agg(
-        Trades=("realized pnl", "count"),
-        TotalPnL=("realized pnl", "sum"),
-        WinRate=("success", "mean"),
-    )
-    comp["WinRate"] = comp["WinRate"] * 100
-    return comp
-
-# ==============================================
 # CHARTS 
 # ============================================== 
 
-def create_charts(df, monthly, monthly_counts, outdir, comparison=None):
+def create_charts(df, monthly, monthly_counts, outdir):
     ensure_dir(outdir)
     charts = {}
 
